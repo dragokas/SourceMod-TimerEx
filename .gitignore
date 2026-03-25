@@ -1,0 +1,7 @@
+# Compiled plugin
+*.smx
+
+# Custom files
+*.zip
+*.rar
+*.7z
