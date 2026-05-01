@@ -50,7 +50,8 @@ CreateTimerEx(3.0, MyCallback, data, TEX_REPEAT);
 ## Security considerations
 
  - TimerEx designed to be silent, e.g. double Kill() call is not considered as an error. This may hide an essential error in your plugin algorithm. Such a way it is unacceptable to have TimerEx as a direct CreateTimer() replacement. For the general purposes, you should stick with standard SM CreateTimer() and following the [Typical templates](https://forums.alliedmods.net/showpost.php?p=2688863&postcount=32) unless you really understand and accept the consequences.
- - You'll never ever need to call CloseHandle() manually.
+ - Unlike classic CreateTimer, it is safe to call any TimerEx method before trigger, during triggering, and after timer is killed as well ! Exclusion is: reference-less timer where that's not allowed.
+ - You'll never ever need to call CloseHandle() manually, unless you want to control data handle lifetime manually.
  - Never ever use the same **tex** reference when you need to create multiple different timers; you need array of references, temporarily reference, or reference-less stock call to do that.
  - TimerEx is not AI, you still need a brain to pass TEX_DATA_HNDL_CLOSE where appropriate, or not pass it if you wanna re-use same data on the next round/map.
  - With a lot of additional TimerEx flags, you can change your approach to the Timer coding phylosophy a little bit, e.g. by utilizing `TEX_ROUNDSTART_REQ` flag instead of killing the timer each time on round end. See later about flags details.

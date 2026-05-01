@@ -16,8 +16,9 @@
 #define _timerex_included
 
 #include <core>
+#include <version>
 
-#define TIMEREX_VERSION "1.0"
+#define TIMEREX_VERSION "1.1"
 
 // The maximum number of TimerEx instances allowed to be created in parallel by a single plugin.
 // This constant can be re-defined before including timerex.inc.
@@ -48,6 +49,13 @@
 		#define _TEX_DBG_WS(%0)
 	#endif
 #endif
+
+// Thanks to @Localia
+#if SOURCEMOD_V_MAJOR > 1 || \
+    (SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR > 13) || \
+    (SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR == 13 && SOURCEMOD_V_REV >= 7304)
+    native bool IsValidHandle(Handle hndl);
+#endif 
 
 #define _TEX_USED_INDICES_KEY_SIZE 8
 #define _TEX(%0) 	_TEX_Storage[view_as<int>(%0)]
@@ -861,11 +869,11 @@ enum struct TimerEx
 		#if TIMEREX_DEBUG
 			_TEX_DBG_Print("(%s) _init | min:%f | max:%f | data:%i | flags:%i | reset:%b", this.GetStateString(), minInterval, maxInterval, data, flags, reset);
 		#endif
-		// Do not use deprecated function as it will trigger compile time warning (see SP: #1040), also removed in SM 1.13.7304.
-		//if (((flags & TIMER_DATA_HNDL_CLOSE) != 0) && (data == 0 || !IsValidHandle(data)))
-		//{
-		//	ThrowError("TimerEx invalid call: TIMER_DATA_HNDL_CLOSE flag supplied, but the handle is not valid: %i", data);
-		//}
+		// Should we use deprecated function? Why not (see SP: #1040), removed in SM 1.13.7304, and resurrected in this plugin.
+		if (((flags & TIMER_DATA_HNDL_CLOSE) != 0) && (data == 0 || !IsValidHandle(data)))
+		{
+			ThrowError("TimerEx invalid call: TIMER_DATA_HNDL_CLOSE flag supplied, but the handle is not valid: %i", data);
+		}
 		if (this._index != 0 && _TEX_P.state == TEX_Running)
 		{
 			this._kill(
@@ -1222,6 +1230,32 @@ private void _TEX_KillTimers(int requiredFlag)
 }
 
 /**
+ * Resets all timers matching the flags specified.
+ */
+private void _TEX_ResetTimers(int requiredFlag)
+{
+	if (!_TEX_IsInit) {
+		return;
+	}
+	TimerEx t;
+	char key[_TEX_USED_INDICES_KEY_SIZE];
+	StringMapSnapshot hSnap = _TEX_UsedIndeces.Snapshot();
+	int _index;
+	for (int i = 0; i < hSnap.Length; i++)
+	{
+		hSnap.GetKey(i, key, _TEX_USED_INDICES_KEY_SIZE);
+		_index = StringToInt(key);
+		
+		if (_TEX(_index).flags & requiredFlag)
+		{
+																						_TEX_DBG("_TEX_ResetTimers | handle:0x%x", _TEX(_index).timer)
+			t.Restart();
+		}
+	}
+	CloseHandle(hSnap);
+}
+
+/**
  * Initializes internal objects and events.
  *
  * @param trackRoundEvents		true - to enable round start/end events tracking for using them by TEX_NO_ROUNDCHANGE flag,
@@ -1272,6 +1306,7 @@ private void _TEX_Event_RoundStart(Event event, const char[] name, bool dontBroa
 {
 																						_TEX_DBG("Event 'RoundStart'", "")
 	_TEX_IsRoundStarted = true;
+	_TEX_ResetTimers(TEX_ROUNDSTART_REQ);
 }
 private void _TEX_Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
@@ -1294,6 +1329,7 @@ void TEX_OnMapStart()
 {
 																						_TEX_DBG("OnMapStart", "")
 	_TEX_IsMapStarted = true;
+	_TEX_ResetTimers(TEX_MAPSTART_REQ);
 }
 
 /** This method must be called from base plugin OnMapEnd() forward to initialize TimerEx properly.
