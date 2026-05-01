@@ -186,7 +186,7 @@ bool Kill(bool closeDataHandle = false)
 bool Dispose()
 ```
 
- - `Kill()` is analogue of SM KillTimer(), however unlike SM, it is allowed to `Run()` timer again using same **tex** reference.
+ - `Kill()` is analogue of SM KillTimer(), however unlike SM, it is allowed to `Run()` timer again using same **tex** reference. Kill() method prevents TEX_RESTART_ON_MAPSTART / TEX_RESTART_ON_ROUNDSTART flags from restarting the timer. The .Stop() method is not.
  - Unlike Kill, the `Stop()` method does **NOT** closes the data handle when TEX_DATA_HNDL_CLOSE flag passed, so `Stop()` - `Run()` methods are usually working in pair.
  - Prefer `Stop()` method if you plan to `Run()` timer again without re-creating **data handle** (or where you not using data handle at all). In this case, you can **tex.CreateTimer()** only once ever in **OnPluginStart()**, but it's not a strict requirement, you can freely call tex.CreateTimer() multiple times using same "tex" reference without risk of handles leaking.
  - Prefer `Kill()` if you start the timer each time with **tex.CreateTimer()** paired with creating new data handle each time.

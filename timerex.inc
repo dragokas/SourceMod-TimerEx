@@ -18,7 +18,7 @@
 #include <core>
 #include <version>
 
-#define TIMEREX_VERSION "1.3"
+#define TIMEREX_VERSION "1.4"
 
 // The maximum number of TimerEx instances allowed to be created in parallel by a single plugin.
 // This constant can be re-defined before including timerex.inc.
@@ -1291,6 +1291,12 @@ private void _TEX_RestartOrResetTimers(bool isRoundStarting)
 	{
 		hSnap.GetKey(i, key, _TEX_USED_INDICES_KEY_SIZE);
 		_index = StringToInt(key);
+		
+		if (_TEX(_index).state == TEX_Killed || _TEX(_index).state == TEX_Disposed)
+		{
+			continue;
+		}
+		
 		TEX_Flags flags = view_as<TEX_Flags>(_TEX(_index).flags);
 		
 		if (isRoundStarting)
