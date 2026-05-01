@@ -18,7 +18,7 @@
 #include <core>
 #include <version>
 
-#define TIMEREX_VERSION "1.1"
+#define TIMEREX_VERSION "1.3"
 
 // The maximum number of TimerEx instances allowed to be created in parallel by a single plugin.
 // This constant can be re-defined before including timerex.inc.
@@ -368,7 +368,7 @@ enum struct TimerEx
 				return this._init(_TEX_P.interval, _TEX_P.interval, _TEX_P.callback, _TEX_P.data, _TEX_P.flags, false);
 			}
 			else {
-				return this._init(_TEX_P.interval, _TEX_P.interval, _TEX_P.callback, _TEX_P.data, _TEX_P.flags, false);
+				return this._init(_TEX_P.minInterval, _TEX_P.maxInterval, _TEX_P.callback, _TEX_P.data, _TEX_P.flags, false);
 			}
 		}
 		return false;
