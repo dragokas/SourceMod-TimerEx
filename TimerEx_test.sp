@@ -45,6 +45,7 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_t.run", 		CmdRun, 		"Runs the timer if it was paused or stopped");
 	RegConsoleCmd("sm_t.stop", 		CmdStop, 		"Stops the timer");
 	RegConsoleCmd("sm_t.restart", 	CmdRestart, 	"Restarts the timer, thus Stop + Run been called");
+	RegConsoleCmd("sm_t.reset", 	CmdReset, 		"Resets trigger's interval preserving the current state of timer");
 	RegConsoleCmd("sm_t.pause", 	CmdPause, 		"Pauses the timer");
 	RegConsoleCmd("sm_t.resume", 	CmdResume, 		"Resumes the timer, that was paused");
 	RegConsoleCmd("sm_t.kill", 		CmdKill, 		"Stops and kills the timer");
@@ -109,6 +110,12 @@ Action CmdStop(int client, int argc)
 Action CmdRestart(int client, int argc)
 {
 	g_Timer.Restart();
+	return Plugin_Handled;
+}
+
+Action CmdReset(int client, int argc)
+{
+	g_Timer.Reset(true);
 	return Plugin_Handled;
 }
 

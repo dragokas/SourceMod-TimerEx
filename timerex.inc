@@ -66,15 +66,19 @@ enum TEX_Flags
 {
 	TEX_FLAGS_NONE = 0,								 /* None flags provided, no effect */
 	TEX_REPEAT = TIMER_REPEAT, 						 /* (1<<0) Timer will repeat until it returns Plugin_Stop */
-	TEX_NO_MAPCHANGE = TIMER_FLAG_NO_MAPCHANGE, 	 /* (1<<1) Timer will not carry over map changes */
-	TEX_NO_ROUNDCHANGE = (1<<2),				 	 /* (1<<2) Timer will not carry over round changes */
-	TEX_NO_CALLBACK_DUPLICATES = (1<<3),			 /* (1<<3) On multiple calls, single-only timer is created per unique callback, unless timer stopped */
-	TEX_NO_CALLBACK_AND_DATA_DUPLICATES = (1<<4),	 /* (1<<4) On multiple calls, single-only timer is created per unique callback and data handle, unless timer stopped */
+	TEX_NO_MAPCHANGE = TIMER_FLAG_NO_MAPCHANGE, 	 /* (1<<1) Timer will not carry over map changes, it will be killed; pair it with TEX_DATA_HNDL_CLOSE to close data handle as well */
+	TEX_NO_ROUNDCHANGE = (1<<2),				 	 /* (1<<2) Timer will not carry over round changes, it will be killed; pair it with TEX_DATA_HNDL_CLOSE to close data handle as well */
+	TEX_NO_CALLBACK_DUPLICATES = (1<<3),			 /* (1<<3) On multiple calls, only one timer is created per unique callback, unless timer stopped */
+	TEX_NO_CALLBACK_AND_DATA_DUPLICATES = (1<<4),	 /* (1<<4) On multiple calls, only one timer is created per unique callback and data handle, unless timer stopped */
 	TEX_NO_REF = (1<<5),							 /* (1<<5) Disposes TimerEx reference as soon as timer gets stopped, no deferred access to reference allowed */
 	TEX_PAUSE = (1<<6),								 /* (1<<6) Creates timer in paused state */
-	TEX_MAPSTART_REQ = (1<<7),						 /* (1<<7) Requires map start to trigger the timer, trigger will be skipped after map ends */
-	TEX_ROUNDSTART_REQ = (1<<8),					 /* (1<<8) Requires round start to trigger the timer, trigger will be skipped after round ends */
-	TEX_DATA_HNDL_CLOSE = TIMER_DATA_HNDL_CLOSE,   	 /* (1<<9) Timer will automatically call CloseHandle() on its data when finished */
+	TEX_MAPSTART_REQ = (1<<7),						 /* (1<<7) Requires map start to trigger the timer, trigger will be skipped after map ends until map will start */
+	TEX_ROUNDSTART_REQ = (1<<8),					 /* (1<<8) Requires round start to trigger the timer, trigger will be skipped after round ends until round will start */
+	TEX_DATA_HNDL_CLOSE = TIMER_DATA_HNDL_CLOSE,   	 /* (1<<9) Timer will automatically call CloseHandle() on its data handle when finished */
+	TEX_RESET_ON_MAPSTART = (1<<10),				 /* (1<<10) Trigger starts counting from zero when map starting; this flag will not auto-start the timer if it is stopped or paused */
+	TEX_RESET_ON_ROUNDSTART = (1<<11),				 /* (1<<11) Trigger starts counting from zero when round starting; this flag will not auto-start the timer if it is stopped or paused */
+	TEX_RESTART_ON_MAPSTART = (1<<12),				 /* (1<<12) Timer is restarted when map starting, such as new timer created unless you called .Kill() method */
+	TEX_RESTART_ON_ROUNDSTART = (1<<13),			 /* (1<<13) Timer is restarted when round starting, such as new timer created unless you called .Kill() method */
 }
 
 enum TEX_State
@@ -83,7 +87,8 @@ enum TEX_State
 	TEX_Running,		/* timer is started, callback triggering is expected when the interval elapses */
 	TEX_Triggering,		/* intermediate state when TimerEx is executing the callback function at the moment */
 	TEX_Paused,			/* timer is paused via .Pause() method */
-	TEX_Stopped			/* timer is stopped via .Stop() method, Map/Round end events, or when all required cycles are finished */
+	TEX_Stopped,		/* timer is stopped via .Stop() method, Map/Round end events, or when all required cycles are finished */
+	TEX_Killed,			/* timer is killed via .Kill() method */
 }
 
 /**
@@ -346,18 +351,25 @@ enum struct TimerEx
 	 * The method will not re-start timer if it is already running.
 	 * Use this method if only you need manual control.
 	 *
+	 * @param sameInterval 	When true, and random timer created, uses the same interval as it was in last cycle. No effect for simple timer.
+	 *
 	 * @return 		true - if timer successfully started,
 	 *				false - if not started, because timer is already running.
 	 *
 	 * @error		thrown if TimerEx disposed, or data handle invalid considering the TEX_DATA_HNDL_CLOSE flag is passed.
 	 */
-	bool Run()
+	bool Run(bool sameInterval = false)
 	{
 		_TEX_ValidateIndex
 																					_TEX_DBG_WS("Run", "")
 		if (_TEX_P.state != TEX_Running)
 		{
-			return this._init(_TEX_P.minInterval, _TEX_P.maxInterval, _TEX_P.callback, _TEX_P.data, _TEX_P.flags, false);
+			if (sameInterval) {
+				return this._init(_TEX_P.interval, _TEX_P.interval, _TEX_P.callback, _TEX_P.data, _TEX_P.flags, false);
+			}
+			else {
+				return this._init(_TEX_P.interval, _TEX_P.interval, _TEX_P.callback, _TEX_P.data, _TEX_P.flags, false);
+			}
 		}
 		return false;
 	}
@@ -387,6 +399,7 @@ enum struct TimerEx
 		{
 			this._kill(
 				.closeDataHandle = false);
+			_TEX_P.state = TEX_Stopped;
 			return true;
 		}
 		else if (_TEX_P.state == TEX_Paused)
@@ -400,17 +413,46 @@ enum struct TimerEx
 	/**
 	 * Restarts the timer.
 	 *
+	 * @param sameInterval 	When true, and random timer created, uses the same interval as it was in last cycle. No effect for simple timer.
+	 *
 	 * @return 		true - if timer successfully started,
 	 *				false - on unexpected error.
 	 *
 	 * @error		thrown if TimerEx disposed, or data handle invalid considering the TEX_DATA_HNDL_CLOSE flag is passed.
 	 */
-	bool Restart()
+	bool Restart(bool sameInterval = false)
 	{
 		_TEX_ValidateIndex
 																					_TEX_DBG_WS("Restart", "")
 		this.Stop();
-		return this.Run();
+		return this.Run(sameInterval);
+	}
+	
+	/**
+	 *  Resets trigger's interval preserving the current state of timer.
+	 *
+	 * @param sameInterval 	When true, and random timer created, uses the same interval as it was in last cycle. No effect for simple timer.
+	 *
+	 * @return 		true - if timer successfully resetted,
+	 *				false - if timer already resetted or unexpected error happened.
+	 *
+	 * @error		thrown if TimerEx disposed, or data handle invalid considering the TEX_DATA_HNDL_CLOSE flag is passed.
+	 */
+	bool Reset(bool sameInterval = false)
+	{
+		_TEX_ValidateIndex
+																					_TEX_DBG_WS("Restart", "")
+		
+		if (_TEX_P.state == TEX_Running || _TEX_P.state == TEX_Triggering)
+		{
+			return this.Restart(sameInterval);
+		}
+		else if (_TEX_P.state == TEX_Paused)
+		{
+			_TEX_P.stopTime = _TEX_P.startTime;
+			return true;
+		}
+		return false;
 	}
 	
 	/**
@@ -584,6 +626,8 @@ enum struct TimerEx
 	 * Stops the timer and closes its handle safely.
 	 * Multiple calls are allowed.
 	 *
+	 * @note	This also prevents TEX_RESTART_ON_MAPSTART / TEX_RESTART_ON_ROUNDSTART flags from restarting the timer.
+	 *
 	 * @param closeDataHandle   If true, the data that was passed to CreateTimerEx() will
 	 *                      	be closed even if TEX_DATA_HNDL_CLOSE flag was not specified.
 	 * 							If false, data handle closed if only TEX_DATA_HNDL_CLOSE flag specified.
@@ -695,7 +739,7 @@ enum struct TimerEx
 	 *
 	 * @noerror
 	 */
-	bool IsFinished() 	 	{ return (_TEX_P.state == TEX_Stopped || _TEX_P.state == TEX_Disposed); }
+	bool IsFinished() 	 	{ return (_TEX_P.state == TEX_Stopped || _TEX_P.state == TEX_Killed || _TEX_P.state == TEX_Disposed); }
 	
 	/**
 	 * Returns the callback pointer to execute once the given interval has elapsed.
@@ -944,7 +988,7 @@ enum struct TimerEx
 	private bool _kill(bool closeDataHandle)
 	{
 																					_TEX_DBG_WS("_kill | closeDataHandle:%b", closeDataHandle)
-		bool isDisposed = false;
+		bool isKilled = false;
 		if (this._index == 0)
 		{
 			return false;
@@ -954,7 +998,7 @@ enum struct TimerEx
 																					_TEX_DBG_WS("HANDLE timer disposed: 0x%x", _TEX_P.timer)
 			CloseHandle(_TEX_P.timer);
 			_TEX_P.timer = INVALID_HANDLE;
-			isDisposed = true;
+			isKilled = true;
 		}
 		if (closeDataHandle && _TEX_P.data != 0)
 		{
@@ -965,20 +1009,21 @@ enum struct TimerEx
 		if (_TEX_P.state == TEX_Running || _TEX_P.state == TEX_Triggering)
 		{
 			_TEX_P.stopTime = GetEngineTime();
-			_TEX_P.state = TEX_Stopped;
 		}
+		_TEX_P.state = TEX_Killed;
+		
 		if (_TEX_P.flags & view_as<int>(TEX_NO_REF))
 		{
 			_TEX_DisposeIndex(this._index);
 			this._index = 0;
 		}
-		return isDisposed;
+		return isKilled;
 	}
 }
 
 /*
 	Pseudo-interface, call redirector.
-	Allows to substiture TimerEx pseudo-handle and call TimerEx methods 
+	Allows to substitute TimerEx pseudo-handle and call TimerEx methods 
 	directly through interface. 
 	Used in alternate version of TimerEx callback prototype.
 */
@@ -996,9 +1041,10 @@ methodmap ITimerEx __nullable__
 		return view_as<ITimerEx>(index);
 	}
 	
-	public bool Run() 								{ _TEX_R.Run(); }
+	public bool Run(bool sameInterval = false) 		{ _TEX_R.Run(sameInterval); }
 	public bool Stop(bool resetInvokeCount = true) 	{ _TEX_R.Stop(resetInvokeCount); }
-	public bool Restart() 							{ _TEX_R.Restart(); }
+	public bool Restart(bool sameInterval = false) 	{ _TEX_R.Restart(sameInterval); }
+	public bool Reset(bool sameInterval = false) 	{ _TEX_R.Reset(sameInterval); }
     public bool Pause() 							{ _TEX_R.Pause(); }
     public bool Resume() 							{ _TEX_R.Resume(); }
 	public bool Delay(float seconds, 
@@ -1186,7 +1232,7 @@ private bool _TEX_GetTimerExByCallback(float minInterval, float maxInterval, Tim
 	{
 		hSnap.GetKey(i, key, _TEX_USED_INDICES_KEY_SIZE);
 		_index = StringToInt(key);
-		if (_TEX(_index).state == TEX_Running)
+		if (_TEX(_index).state == TEX_Running || _TEX(_index).state == TEX_Paused)
 		{
 			if (_TEX(_index).callback == func && _TEX(_index).minInterval == minInterval && _TEX(_index).maxInterval == maxInterval)
 			{
@@ -1205,7 +1251,7 @@ private bool _TEX_GetTimerExByCallback(float minInterval, float maxInterval, Tim
 }
 
 /**
- * Kills all timers matching the flags specified.
+ * Kills timers matching the flags specified.
  */
 private void _TEX_KillTimers(int requiredFlag)
 {
@@ -1230,9 +1276,9 @@ private void _TEX_KillTimers(int requiredFlag)
 }
 
 /**
- * Resets all timers matching the flags specified.
+ * Restarts or resets timers depending on its flags.
  */
-private void _TEX_ResetTimers(int requiredFlag)
+private void _TEX_RestartOrResetTimers(bool isRoundStarting)
 {
 	if (!_TEX_IsInit) {
 		return;
@@ -1245,11 +1291,32 @@ private void _TEX_ResetTimers(int requiredFlag)
 	{
 		hSnap.GetKey(i, key, _TEX_USED_INDICES_KEY_SIZE);
 		_index = StringToInt(key);
+		TEX_Flags flags = view_as<TEX_Flags>(_TEX(_index).flags);
 		
-		if (_TEX(_index).flags & requiredFlag)
+		if (isRoundStarting)
 		{
-																						_TEX_DBG("_TEX_ResetTimers | handle:0x%x", _TEX(_index).timer)
-			t.Restart();
+			if (flags & TEX_RESET_ON_ROUNDSTART)
+			{
+																						_TEX_DBG("Reset timer on round start | handle:0x%x", _TEX(_index).timer)
+				t.Reset();
+			}
+			else if (flags & TEX_RESTART_ON_ROUNDSTART)
+			{
+																						_TEX_DBG("Restart timer on round start | handle:0x%x", _TEX(_index).timer)
+				t.Restart();
+			}
+		}
+		else {
+			if (flags & TEX_RESET_ON_MAPSTART)
+			{
+																						_TEX_DBG("Reset timer on map start | handle:0x%x", _TEX(_index).timer)
+				t.Reset();
+			}
+			else if (flags & TEX_RESTART_ON_MAPSTART)
+			{
+																						_TEX_DBG("Restart timer on map start | handle:0x%x", _TEX(_index).timer)
+				t.Restart();
+			}
 		}
 	}
 	CloseHandle(hSnap);
@@ -1259,7 +1326,7 @@ private void _TEX_ResetTimers(int requiredFlag)
  * Initializes internal objects and events.
  *
  * @param trackRoundEvents		true - to enable round start/end events tracking for using them by TEX_NO_ROUNDCHANGE flag,
- *								false - do not track round start/end events, TEX_NO_ROUNDCHANGE flag will not work.
+ *								false - do not track round start/end events, TEX_NO_ROUNDCHANGE flag will not work (may be used for optimization purposes).
  *
  * @note						The plugin may manually call this function with .trackRoundEvents=false in OnPluginStart()
  *								to optimize the resources usage a little bit in case plugin never uses TEX_NO_ROUNDCHANGE flag.
@@ -1306,7 +1373,7 @@ private void _TEX_Event_RoundStart(Event event, const char[] name, bool dontBroa
 {
 																						_TEX_DBG("Event 'RoundStart'", "")
 	_TEX_IsRoundStarted = true;
-	_TEX_ResetTimers(TEX_ROUNDSTART_REQ);
+	_TEX_RestartOrResetTimers(.isRoundStarting = true);
 }
 private void _TEX_Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
@@ -1329,7 +1396,7 @@ void TEX_OnMapStart()
 {
 																						_TEX_DBG("OnMapStart", "")
 	_TEX_IsMapStarted = true;
-	_TEX_ResetTimers(TEX_MAPSTART_REQ);
+	_TEX_RestartOrResetTimers(.isRoundStarting = false);
 }
 
 /** This method must be called from base plugin OnMapEnd() forward to initialize TimerEx properly.
@@ -1378,6 +1445,7 @@ stock void TEX_StateToString(TEX_State state, char[] buffer, int maxlength)
 	if (state == TEX_Triggering)  	{ strcopy(buffer, maxlength, "Triggering"); }
 	if (state == TEX_Paused)   		{ strcopy(buffer, maxlength, "Paused");   	}
 	if (state == TEX_Stopped)  		{ strcopy(buffer, maxlength, "Stopped");  	}
+	if (state == TEX_Killed)  		{ strcopy(buffer, maxlength, "Killed");  	}
 	if (state == TEX_Disposed) 		{ strcopy(buffer, maxlength, "Disposed"); 	}
 }
 

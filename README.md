@@ -75,9 +75,10 @@ stock void CreateRandomTimerEx(float minInterval, float maxInterval, TimerExCall
 
 ## Control
 ```
-bool Run()
+bool Run(bool sameInterval = false)
 bool Stop(bool resetInvokeCount = true)
-bool Restart()
+bool Restart(bool sameInterval = false)
+bool Reset(bool sameInterval = false)
 bool Pause()
 bool Resume()
 bool Delay(float seconds, bool applyToAllCycles = false)
@@ -153,15 +154,19 @@ Note: callback is fully compatible with SM ["Timer" typeset](https://sm.alliedmo
 | Flag | Description |
 |------|-------------|
 | `TEX_REPEAT` | Timer will repeat until it returns `Plugin_Stop` |
-| `TEX_NO_MAPCHANGE` | Timer will not carry over map changes |
-| `TEX_NO_ROUNDCHANGE` | Timer will not carry over round changes |
-| `TEX_NO_CALLBACK_DUPLICATES` | On multiple calls, single-only timer is created per unique callback, unless timer stopped |
-| `TEX_NO_CALLBACK_AND_DATA_DUPLICATES` | On multiple calls, single-only timer is created per unique callback and data handle, unless timer stopped |
+| `TEX_NO_MAPCHANGE` | Timer will not carry over map changes, it will be killed; pair it with TEX_DATA_HNDL_CLOSE to close data handle as well |
+| `TEX_NO_ROUNDCHANGE` | Timer will not carry over round changes, it will be killed; pair it with TEX_DATA_HNDL_CLOSE to close data handle as well |
+| `TEX_NO_CALLBACK_DUPLICATES` | On multiple calls, only one timer is created per unique callback, unless timer stopped |
+| `TEX_NO_CALLBACK_AND_DATA_DUPLICATES` | On multiple calls, only one timer is created per unique callback and data handle, unless timer stopped |
 | `TEX_NO_REF` | Disposes TimerEx reference as soon as timer gets stopped, no deferred access to reference allowed; this flag is used by CreateTimerEx stock |
 | `TEX_PAUSE` | Creates timer in paused state |
-| `TEX_MAPSTART_REQ` | Requires map start to trigger the timer; trigger will be skipped after map ends |
-| `TEX_ROUNDSTART_REQ` | Requires round start to trigger the timer; trigger will be skipped after round ends |
+| `TEX_MAPSTART_REQ` | Requires map start to trigger the timer; trigger will be skipped after map ends until map will start |
+| `TEX_ROUNDSTART_REQ` | Requires round start to trigger the timer; trigger will be skipped after round ends until round will start |
 | `TEX_DATA_HNDL_CLOSE` | Timer will automatically call `CloseHandle()` on its data when finished |
+| `TEX_RESET_ON_MAPSTART` | Trigger starts counting from zero when map starting; this flag will not auto-start the timer if it is stopped or paused |
+| `TEX_RESET_ON_ROUNDSTART` | Trigger starts counting from zero when round starting; this flag will not auto-start the timer if it is stopped or paused |
+| `TEX_RESTART_ON_MAPSTART` | Timer is restarted when map starting, such as new timer created unless you called .Kill() method |
+| `TEX_RESTART_ON_ROUNDSTART` | Timer is restarted when round starting, such as new timer created unless you called .Kill() method |
 
 ## States (TEX_State)
 
