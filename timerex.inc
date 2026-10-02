@@ -18,7 +18,7 @@
 #include <core>
 #include <version>
 
-#define TIMEREX_VERSION "1.4"
+#define TIMEREX_VERSION "1.5"
 
 // The maximum number of TimerEx instances allowed to be created in parallel by a single plugin.
 // This constant can be re-defined before including timerex.inc.
@@ -57,6 +57,11 @@
     native bool IsValidHandle(Handle hndl);
 #endif 
 
+#if (SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR < 13) || \
+    (SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR == 13 && SOURCEMOD_V_REV <= 7456)
+    #define TIMER_FLAG_TICK_PRECISE (1<<2)
+#endif
+
 #define _TEX_USED_INDICES_KEY_SIZE 8
 #define _TEX(%0) 	_TEX_Storage[view_as<int>(%0)]
 #define _TEX_P 		_TEX(this._index)
@@ -79,6 +84,7 @@ enum TEX_Flags
 	TEX_RESET_ON_ROUNDSTART = (1<<11),				 /* (1<<11) Trigger starts counting from zero when round starting; this flag will not auto-start the timer if it is stopped or paused */
 	TEX_RESTART_ON_MAPSTART = (1<<12),				 /* (1<<12) Timer is restarted when map starting, such as new timer created unless you called .Kill() method */
 	TEX_RESTART_ON_ROUNDSTART = (1<<13),			 /* (1<<13) Timer is restarted when round starting, such as new timer created unless you called .Kill() method */
+	TEX_TICK_PRECISE = (1<<14),						 /* (1<<14) Timer will have tick level time precision */
 }
 
 enum TEX_State
@@ -964,7 +970,7 @@ enum struct TimerEx
 			_TEX_P.flags = flags;
 			_TEX_P.state = TEX_Running;
 			_TEX_P.timer = 
-				CreateTimer(_TEX_P.interval, _TEX_OnTrigger, this._index, flags & TIMER_REPEAT); // TEX_REPEAT is only allowed flag here
+				CreateTimer(_TEX_P.interval, _TEX_OnTrigger, this._index, MapTexFlagsToSMFlags(view_as<TEX_Flags>(flags)));
 			
 																						_TEX_DBG_WS("HANDLE timer created: 0x%x", _TEX_P.timer)
 			if (_TEX_P.timer == INVALID_HANDLE)
@@ -1019,6 +1025,21 @@ enum struct TimerEx
 		}
 		return isKilled;
 	}
+}
+
+private int MapTexFlagsToSMFlags(TEX_Flags texFlags)
+{
+	/* Only allowed flags:
+	 - TIMER_REPEAT 
+	 - TIMER_FLAG_TICK_PRECISE
+	*/
+	int flags = 0;
+	if (texFlags & TEX_TICK_PRECISE)
+	{
+		flags |= TIMER_FLAG_TICK_PRECISE;
+	}
+	flags |= view_as<int>(texFlags & TEX_REPEAT);
+	return flags;
 }
 
 /*

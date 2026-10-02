@@ -167,6 +167,7 @@ Note: callback is fully compatible with SM ["Timer" typeset](https://sm.alliedmo
 | `TEX_RESET_ON_ROUNDSTART` | Trigger starts counting from zero when round starting; this flag will not auto-start the timer if it is stopped or paused |
 | `TEX_RESTART_ON_MAPSTART` | Timer is restarted when map starting, such as new timer created unless you called .Kill() method |
 | `TEX_RESTART_ON_ROUNDSTART` | Timer is restarted when round starting, such as new timer created unless you called .Kill() method |
+| `TEX_TICK_PRECISE` | Timer will have tick level time precision |
 
 ## States (TEX_State)
 
